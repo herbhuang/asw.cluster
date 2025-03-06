@@ -2311,7 +2311,7 @@ fau.shaw <- function(data.c,categories=NULL)
   #if (min(categories) < 2) stop("Each variable should have at least 2 categories")
 
 
-  FLS <- 0
+  FLS <- NULL
   # Calculate internal alignment (IA)
   for (var1 in 1:nv)
   {
@@ -2347,15 +2347,15 @@ fau.shaw <- function(data.c,categories=NULL)
           ifelse(MaxDiff != 0,
                  IA_var1_var2 <- ((IA_obs - IA_noalign)/MaxDiff), 
                  IA_var1_var2 <- 0)
-          IA_var1 <- IA_var1 + IA_var1_var2        
+
+          IA_var1 <- IA_var1 + IA_var1_var2
+          # print out each dimensions's IA
+          #cat("IA_",var2,"is",IA_var1_var2,"\n")
       }
        
    }
    IA_var1 <- IA_var1 / (categories[var1] * (nv - 1))
    #cat("IA_var1_total:",IA_var1,"\n")
-
-
-
 
    # Calculate Cross-Group Alignment Index (CGAI)
    CGAI_var1 <- 0
@@ -2411,7 +2411,7 @@ fau.shaw <- function(data.c,categories=NULL)
        
           W_denom <- sum(Wt)
           ifelse((W_denom != 0),Wt <- Wt / W_denom,Wt <- Wt * 0)
-       
+          
           CGAI_var1 <- CGAI_var1 + sum(CP * Wt)
           #cat("CGAI:",CGAI_var1,"\n")
        }
@@ -2419,12 +2419,14 @@ fau.shaw <- function(data.c,categories=NULL)
    }
    CGAI_var1 <- CGAI_var1 / (nv-1)	
    FLS_var1 <- IA_var1 * (1 - CGAI_var1)
-   FLS <- FLS + FLS_var1
+   # print them out
+   cat("👻for var", var1, "IA:", IA_var1, "\tCGAI:",CGAI_var1,"\tFLS:",FLS_var1,"\n")
+   FLS[var1] <- FLS_var1
   }
-  FLS <- FLS / nv
-
-
-  return(FLS)
+  
+  FLS.overall <- sum(FLS) / nv
+  #print(list(overall=FLS.overall, ind=FLS))
+  return(list(overall=FLS.overall, each=FLS))
 }
 
 
@@ -3392,6 +3394,7 @@ convert.to.long <- function(res, ...)
    	   	   	   }                   
    	   	   }
    	   }
+   	   
    }
    
    
@@ -3522,7 +3525,10 @@ faultlines.calc <- function(group, group.vect , data, method=method, maxgroups=m
       
           if (method == "SHAW")
           {
-              fl <- fau.shaw(data.team)
+              fl.shaw <- fau.shaw(data.team)
+              fl <- fl.shaw$overall
+              fl.each <- fl.shaw$each
+              #fl.var <- fl.shaw
           }
        
           if (method == "TREZZINI")
@@ -3572,7 +3578,7 @@ faultlines.calc <- function(group, group.vect , data, method=method, maxgroups=m
        }
        
        
-       return(list(team=group,teamsize=nrow(data.team),fl.value=fl,fl.mbr=fl.mbr,mbr_to_subgroups=fl.groups,number_of_subgroups=fl.nofsg,adjm=fl.adjm,fl.ind=fl.ind,distmat=D))
+       return(list(team=group,teamsize=nrow(data.team),fl.value=fl,fl.mbr=fl.mbr,mbr_to_subgroups=fl.groups,number_of_subgroups=fl.nofsg,adjm=fl.adjm,fl.ind=fl.ind,distmat=D, fl.each = unlist(list(each = fl.each))))
 }
 
 
@@ -3849,7 +3855,7 @@ faultlines.default <- function(data,group.par="NA",attr.type=NA,attr.weight=NA,r
    fl.ind <- NA
    fl.nofsg <- NA
    distmat <- NA
-   
+   fl.try <- NA
  
 # parallel processing
 
@@ -3899,7 +3905,7 @@ print.aswclust <- function(x, ...)
     
     pars <- 3
     n.teams <- length(x) - pars
-
+    
     res <- (matrix(ncol=5,nrow=0))
 
     
@@ -3927,7 +3933,7 @@ print.aswclust <- function(x, ...)
     	res$subgroup.association <- "multiple"
     	res$subgroup.sizes <- "multiple"
     }
-    
+
     print(res)
 }
 
@@ -3950,6 +3956,7 @@ summary.aswclust <- function(object, ...)
   mbr_sg <- list()
   adjm <- list()
   distmat <- list()
+  each <- NULL
 	for (i in 1:n.teams)
     {
     	teams <- c(teams,object[[i]]$team)
@@ -3959,7 +3966,7 @@ summary.aswclust <- function(object, ...)
         nof_sg_text <- c(nof_sg_text,v2t(nof_sg[[i]]))
     	fli[[i]] <- object[[i]]$fl.ind
     	distmat[[i]] <- data.frame(object[[i]]$distmat)
-    	
+    	each <- rbind(each, object[[i]]$fl.each)
     	if (object$i.level == TRUE)
     	{
     		mbr_sg[[i]] <- data.frame(object[[i]]$mbr_to_subgroups)
@@ -3973,8 +3980,9 @@ summary.aswclust <- function(object, ...)
     	}
     }
 
-
-    fltab <- data.frame(team = teams, fl.value = flt, number_of_subgroups = nof_sg_text)
+    
+    fltab <- cbind(data.frame(team = teams, fl.value = flt, number_of_subgroups = nof_sg_text),
+                   each)
 	res <- list(n.teams = n.teams, 
 	            method = method, 
 	            metric = metric,
